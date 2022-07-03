@@ -156,17 +156,17 @@ fn draw_rects(
             darkness += column_darkness;
 
             if darkness >= target_darkness {
-                // We found the split! draw a line
-                vertical_line(
-                    output,
-                    x as f64 / input.width() as f64,
-                    area.top / input.height() as f64,
-                    area.bottom / input.height() as f64,
-                );
-
                 let overshoot = darkness - target_darkness;
                 // Find the exact point of the split by taking away the amount we overshot.
                 let split = (x + 1) as f64 - overshoot / column_darkness;
+
+                // Draw the line dividing the two new rectangles
+                vertical_line(
+                    output,
+                    split / input.width() as f64,
+                    area.top / input.height() as f64,
+                    area.bottom / input.height() as f64,
+                );
 
                 let left = Rectangle {
                     right: split,
@@ -193,17 +193,17 @@ fn draw_rects(
             darkness += row_darkness;
 
             if darkness >= target_darkness {
-                // We found the split! draw a line
-                horizontal_line(
-                    output,
-                    y as f64 / input.height() as f64,
-                    area.left / input.width() as f64,
-                    area.right / input.width() as f64,
-                );
-
                 let overshoot = darkness - target_darkness;
                 // Find the exact point of the split by taking away the amount we overshot.
                 let split = (y + 1) as f64 - overshoot / row_darkness;
+
+                // Draw the line dividing the two new rectangles
+                horizontal_line(
+                    output,
+                    split / input.height() as f64,
+                    area.left / input.width() as f64,
+                    area.right / input.width() as f64,
+                );
 
                 let top = Rectangle {
                     bottom: split,
