@@ -137,57 +137,73 @@ fn draw_rects(
         return;
     }
 
+    // The amount of darkness we've found so far.
+    let mut darkness = 0.0;
+
+    // The target number of rectangles to be in the first half.
+    let target_rects = rects / 2;
+    // The target amount of darkness in the first half.
+    let target_darkness = target_rects as f32 / settings.rects_per_pixel;
+
     if area.width() > area.height() {
         // split it horizontally
-        let mut darkness = 0.0;
         for x in area.left as u32..area.right as u32 {
+            let mut column_darkness = 0.0;
             for y in area.top as u32..area.bottom as u32 {
-                darkness += darkness_at(input, area, x, y);
-                if darkness * settings.rects_per_pixel >= (rects / 2) as f32 {
-                    // We found the split! draw a line
-                    vertical_line(output, x, area.top as u32, area.bottom as u32);
-                    // then recurse
-                    let split = x as f32 + (y - area.top as u32) as f32 / area.height() as f32;
+                column_darkness += darkness_at(input, area, x, y);
+            }
+            darkness += column_darkness;
 
-                    let left = Rectangle {
-                        right: split,
-                        ..area
-                    };
-                    let right = Rectangle {
-                        left: split,
-                        ..area
-                    };
+            if darkness >= target_darkness {
+                // We found the split! draw a line
+                vertical_line(output, x, area.top as u32, area.bottom as u32);
 
-                    draw_rects(input, output, settings, left, rects / 2);
-                    draw_rects(input, output, settings, right, rects - rects / 2);
+                let overshoot = darkness - target_darkness;
+                // Find the exact point of the split by taking away the amount we overshot.
+                let split = (x + 1) as f32 - overshoot / column_darkness;
 
-                    return;
-                }
+                let left = Rectangle {
+                    right: split,
+                    ..area
+                };
+                let right = Rectangle {
+                    left: split,
+                    ..area
+                };
+
+                draw_rects(input, output, settings, left, rects / 2);
+                draw_rects(input, output, settings, right, rects - rects / 2);
+
+                return;
             }
         }
     } else {
         // split it vertically
-        let mut darkness = 0.0;
         for y in area.top as u32..area.bottom as u32 {
+            let mut row_darkness = 0.0;
             for x in area.left as u32..area.right as u32 {
-                darkness += darkness_at(input, area, x, y);
-                if darkness * settings.rects_per_pixel >= (rects / 2) as f32 {
-                    // We found the split! draw a line
-                    horizontal_line(output, y, area.left as u32, area.right as u32);
-                    // then recurse
-                    let split = y as f32 + (x - area.left as u32) as f32 / area.width() as f32;
+                row_darkness += darkness_at(input, area, x, y);
+            }
+            darkness += row_darkness;
 
-                    let top = Rectangle {
-                        bottom: split,
-                        ..area
-                    };
-                    let bottom = Rectangle { top: split, ..area };
+            if darkness >= target_darkness {
+                // We found the split! draw a line
+                horizontal_line(output, y, area.left as u32, area.right as u32);
 
-                    draw_rects(input, output, settings, top, rects / 2);
-                    draw_rects(input, output, settings, bottom, rects - rects / 2);
+                let overshoot = darkness - target_darkness;
+                // Find the exact point of the split by taking away the amount we overshot.
+                let split = (y + 1) as f32 - overshoot / row_darkness;
 
-                    return;
-                }
+                let top = Rectangle {
+                    bottom: split,
+                    ..area
+                };
+                let bottom = Rectangle { top: split, ..area };
+
+                draw_rects(input, output, settings, top, rects / 2);
+                draw_rects(input, output, settings, bottom, rects - rects / 2);
+
+                return;
             }
         }
     }
