@@ -41,12 +41,12 @@ impl ObjectSubclass for Rectanglify {
 impl ObjectImpl for Rectanglify {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecFloat::new(
+            vec![glib::ParamSpecDouble::new(
                 "rects-per-pixel",
                 "Rectangles per black pixel",
                 "The number of rectangles drawn for 1 black pixel's worth of darkness",
                 0.0,
-                f32::MAX,
+                f64::MAX,
                 0.0001,
                 glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
             )]
