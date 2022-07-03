@@ -41,25 +41,21 @@ fn darkness<P: Pixel>(p: P) -> f32 {
 }
 
 fn darkness_at(image: &impl GenericImageView, rect: Rectangle, x: u32, y: u32) -> f32 {
-    if image.in_bounds(x, y) {
-        let mut darkness = darkness(image.get_pixel(x, y));
+    let mut darkness = darkness(image.get_pixel(x, y));
 
-        if rect.left as u32 == x {
-            darkness *= 1.0 - rect.left % 1.0;
-        } else if rect.right as u32 == x {
-            darkness *= rect.right % 1.0;
-        }
-
-        if rect.top as u32 == y {
-            darkness *= 1.0 - rect.top % 1.0;
-        } else if rect.bottom as u32 == y {
-            darkness *= rect.bottom % 1.0;
-        }
-
-        darkness
-    } else {
-        0.0
+    if rect.left as u32 == x {
+        darkness *= 1.0 - rect.left % 1.0;
+    } else if rect.right as u32 == x {
+        darkness *= rect.right % 1.0;
     }
+
+    if rect.top as u32 == y {
+        darkness *= 1.0 - rect.top % 1.0;
+    } else if rect.bottom as u32 == y {
+        darkness *= rect.bottom % 1.0;
+    }
+
+    darkness
 }
 
 fn horizontal_line<I: GenericImage>(image: &mut I, y: u32, start_x: u32, end_x: u32) {
