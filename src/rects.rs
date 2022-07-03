@@ -58,31 +58,41 @@ fn darkness_at(image: &impl GenericImageView, rect: Rectangle, x: u32, y: u32) -
     darkness
 }
 
-fn horizontal_line<I: GenericImage>(image: &mut I, y: u32, start_x: u32, end_x: u32) {
-    let black = <I::Pixel as Pixel>::from_slice(&vec![
-            // make everything 0 for black
-            <I::Pixel as Pixel>::Subpixel::DEFAULT_MIN_VALUE;
-            <I::Pixel as Pixel>::CHANNEL_COUNT as usize
-        ])
+fn black<P: Pixel>() -> P {
+    P::from_slice(&vec![
+        // make everything 0 for black
+        P::Subpixel::DEFAULT_MIN_VALUE;
+        P::CHANNEL_COUNT as usize
+    ])
     // except alpha, which should be maxed
-    .map_with_alpha(|x| x, |_| <I::Pixel as Pixel>::Subpixel::DEFAULT_MAX_VALUE);
+    .map_with_alpha(|x| x, |_| P::Subpixel::DEFAULT_MAX_VALUE)
+}
+
+fn white<P: Pixel>() -> P {
+    *P::from_slice(&vec![
+        // make everything max for white
+        P::Subpixel::DEFAULT_MAX_VALUE;
+        P::CHANNEL_COUNT as usize
+    ])
+}
+
+fn horizontal_line<I: GenericImage>(image: &mut I, y: f64, start_x: f64, end_x: f64) {
+    let start_x = (start_x * image.width() as f64).floor() as u32;
+    let end_x = (end_x * image.width() as f64).ceil() as u32 - 1;
+    let y = (y * image.height() as f64).floor() as u32;
 
     for x in start_x..=end_x {
-        image.put_pixel(x, y, black);
+        image.put_pixel(x, y, black());
     }
 }
 
-fn vertical_line<I: GenericImage>(image: &mut I, x: u32, start_y: u32, end_y: u32) {
-    let black = <I::Pixel as Pixel>::from_slice(&vec![
-            // make everything 0 for black
-            <I::Pixel as Pixel>::Subpixel::DEFAULT_MIN_VALUE;
-            <I::Pixel as Pixel>::CHANNEL_COUNT as usize
-        ])
-    // except alpha, which should be maxed
-    .map_with_alpha(|x| x, |_| <I::Pixel as Pixel>::Subpixel::DEFAULT_MAX_VALUE);
+fn vertical_line<I: GenericImage>(image: &mut I, x: f64, start_y: f64, end_y: f64) {
+    let start_y = (start_y * image.height() as f64).floor() as u32;
+    let end_y = (end_y * image.height() as f64).ceil() as u32 - 1;
+    let x = (x * image.width() as f64).floor() as u32;
 
     for y in start_y..=end_y {
-        image.put_pixel(x, y, black);
+        image.put_pixel(x, y, black());
     }
 }
 
@@ -97,14 +107,9 @@ pub fn rectanglify<I: GenericImageView, O: GenericImage>(
     settings.rects_per_pixel = num_rects as f64 / total_darkness;
 
     // fill the output with white to start with
-    let white = *<O::Pixel as Pixel>::from_slice(&vec![
-        // make everything max for black
-        <O::Pixel as Pixel>::Subpixel::DEFAULT_MAX_VALUE;
-        <O::Pixel as Pixel>::CHANNEL_COUNT as usize
-    ]);
     for x in 0..output.width() {
         for y in 0..output.height() {
-            output.put_pixel(x, y, white)
+            output.put_pixel(x, y, white())
         }
     }
 
@@ -154,9 +159,9 @@ fn draw_rects(
                 // We found the split! draw a line
                 vertical_line(
                     output,
-                    x,
-                    area.top.floor() as u32,
-                    area.bottom.ceil() as u32 - 1,
+                    x as f64 / input.width() as f64,
+                    area.top / input.height() as f64,
+                    area.bottom / input.height() as f64,
                 );
 
                 let overshoot = darkness - target_darkness;
@@ -191,9 +196,9 @@ fn draw_rects(
                 // We found the split! draw a line
                 horizontal_line(
                     output,
-                    y,
-                    area.left.floor() as u32,
-                    area.right.ceil() as u32 - 1,
+                    y as f64 / input.height() as f64,
+                    area.left / input.width() as f64,
+                    area.right / input.width() as f64,
                 );
 
                 let overshoot = darkness - target_darkness;

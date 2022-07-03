@@ -8,15 +8,15 @@ use gst_video::subclass::prelude::*;
 use gst_video::VideoFormat;
 use gst_video::VideoFrameRef;
 use image::ImageBuffer;
-use image::Rgb;
+use image::Luma;
 
 use std::i32;
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
 
-use crate::rects::Settings;
 use crate::rects::rectanglify;
+use crate::rects::Settings;
 
 #[derive(Default)]
 pub struct Rectanglify {
@@ -94,6 +94,29 @@ impl ObjectImpl for Rectanglify {
 
 impl GstObjectImpl for Rectanglify {}
 
+fn caps() -> gst::Caps {
+    gst::Caps::builder("video/x-raw")
+        .field(
+            "format",
+            gst::List::new([
+                // VideoFormat::Rgba.to_str(),
+                // VideoFormat::Argb.to_str(),
+                // VideoFormat::Bgra.to_str(),
+                // VideoFormat::Abgr.to_str(),
+                // VideoFormat::Rgb.to_str(),
+                // VideoFormat::Bgr.to_str(),
+                VideoFormat::Gray8.to_str(),
+            ]),
+        )
+        .field("width", gst::IntRange::new(0, i32::MAX))
+        .field("height", gst::IntRange::new(0, i32::MAX))
+        .field(
+            "framerate",
+            gst::FractionRange::new(gst::Fraction::new(0, 1), gst::Fraction::new(i32::MAX, 1)),
+        )
+        .build()
+}
+
 impl ElementImpl for Rectanglify {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
@@ -111,28 +134,7 @@ impl ElementImpl for Rectanglify {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             // src pad capabilities
-            let caps = gst::Caps::builder("video/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([
-                        // VideoFormat::Rgba.to_str(),
-                        // VideoFormat::Argb.to_str(),
-                        // VideoFormat::Bgra.to_str(),
-                        // VideoFormat::Abgr.to_str(),
-                        VideoFormat::Rgb.to_str(),
-                        // VideoFormat::Bgr.to_str(),
-                    ]),
-                )
-                .field("width", gst::IntRange::new(0, i32::MAX))
-                .field("height", gst::IntRange::new(0, i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
-                .build();
+            let caps = caps();
 
             let src_pad_template = gst::PadTemplate::new(
                 "src",
@@ -162,6 +164,17 @@ impl BaseTransformImpl for Rectanglify {
         gst_base::subclass::BaseTransformMode::NeverInPlace;
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+
+    fn transform_caps(
+        &self,
+        _: &Self::Type,
+        _: gst::PadDirection,
+        _: &gst::Caps,
+        _: Option<&gst::Caps>,
+    ) -> Option<gst::Caps> {
+        // the input and output are completely independent, we always support the full caps.
+        Some(caps())
+    }
 }
 
 impl VideoFilterImpl for Rectanglify {
@@ -173,9 +186,16 @@ impl VideoFilterImpl for Rectanglify {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let settings = *self.settings.lock().unwrap();
 
-        // TODO: stuff other than pure rgb
-        let input: ImageBuffer<Rgb<u8>, _> = ImageBuffer::from_raw(input.width(), input.height(), input.plane_data(0).unwrap()).unwrap();
-        let mut output: ImageBuffer<Rgb<u8>, _> = ImageBuffer::from_raw(output.width(), output.height(), output.plane_data_mut(0).unwrap()).unwrap();
+        // TODO: stuff other than pure grayscale
+        let input: ImageBuffer<Luma<u8>, _> =
+            ImageBuffer::from_raw(input.width(), input.height(), input.plane_data(0).unwrap())
+                .unwrap();
+        let mut output: ImageBuffer<Luma<u8>, _> = ImageBuffer::from_raw(
+            output.width(),
+            output.height(),
+            output.plane_data_mut(0).unwrap(),
+        )
+        .unwrap();
 
         rectanglify(&input, &mut output, settings);
 
