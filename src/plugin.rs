@@ -9,8 +9,12 @@ use gst_video::VideoFormat;
 use gst_video::VideoFrameRef;
 use image::ImageBuffer;
 use image::Luma;
+use image::Pixel;
+use image::Rgb;
+use image::Rgba;
 
 use std::i32;
+use std::ops::Deref;
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
@@ -95,18 +99,11 @@ impl ObjectImpl for Rectanglify {
 impl GstObjectImpl for Rectanglify {}
 
 fn caps() -> gst::Caps {
+    use VideoFormat::*;
     gst::Caps::builder("video/x-raw")
         .field(
             "format",
-            gst::List::new([
-                // VideoFormat::Rgba.to_str(),
-                // VideoFormat::Argb.to_str(),
-                // VideoFormat::Bgra.to_str(),
-                // VideoFormat::Abgr.to_str(),
-                // VideoFormat::Rgb.to_str(),
-                // VideoFormat::Bgr.to_str(),
-                VideoFormat::Gray8.to_str(),
-            ]),
+            gst::List::new([Rgba.to_str(), Rgb.to_str(), Gray8.to_str()]),
         )
         .field("width", gst::IntRange::new(0, i32::MAX))
         .field("height", gst::IntRange::new(0, i32::MAX))
@@ -186,18 +183,68 @@ impl VideoFilterImpl for Rectanglify {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let settings = *self.settings.lock().unwrap();
 
-        // TODO: stuff other than pure grayscale
-        let input: ImageBuffer<Luma<u8>, _> =
-            ImageBuffer::from_raw(input.width(), input.height(), input.plane_data(0).unwrap())
-                .unwrap();
-        let mut output: ImageBuffer<Luma<u8>, _> = ImageBuffer::from_raw(
-            output.width(),
-            output.height(),
-            output.plane_data_mut(0).unwrap(),
-        )
-        .unwrap();
+        // This stupid trait is needed because we can't make generic callbacks.
+        trait FormatCb<C> {
+            fn call(self, image: ImageBuffer<impl Pixel<Subpixel = u8>, C>);
+        }
 
-        rectanglify(&input, &mut output, settings);
+        fn with_image<C: Deref<Target = [u8]>>(
+            width: u32,
+            height: u32,
+            format: VideoFormat,
+            container: C,
+            callback: impl FormatCb<C>,
+        ) {
+            macro_rules! formats {
+                ($($gst:ident => $image:ty,)*) => {
+                    match format {
+                        $(
+                        VideoFormat::$gst => {
+                            let image = ImageBuffer::<$image, C>::from_raw(width, height, container).unwrap();
+                            callback.call(image);
+                        }
+                        )*
+                        _ => unimplemented!(),
+                    }
+                };
+            }
+
+            // TODO: more formats
+            // see https://gstreamer.freedesktop.org/documentation/additional/design/mediatype-video-raw.html#formats
+            formats! {
+                Rgba => Rgba<u8>,
+                Rgb => Rgb<u8>,
+                Gray8 => Luma<u8>,
+            }
+        }
+
+        with_image(
+            input.width(),
+            input.height(),
+            input.format(),
+            input.plane_data(0).unwrap(),
+            (settings, output),
+        );
+
+        impl FormatCb<&[u8]> for (Settings, &mut VideoFrameRef<&mut BufferRef>) {
+            fn call(self, input: ImageBuffer<impl Pixel<Subpixel = u8>, &[u8]>) {
+                let (settings, output) = self;
+                with_image(
+                    output.width(),
+                    output.height(),
+                    output.format(),
+                    output.plane_data_mut(0).unwrap(),
+                    (settings, input),
+                );
+            }
+        }
+
+        impl<P: Pixel<Subpixel = u8>> FormatCb<&mut [u8]> for (Settings, ImageBuffer<P, &[u8]>) {
+            fn call(self, mut output: ImageBuffer<impl Pixel<Subpixel = u8>, &mut [u8]>) {
+                let (settings, input) = self;
+                rectanglify(&input, &mut output, settings)
+            }
+        }
 
         Ok(gst::FlowSuccess::Ok)
     }
