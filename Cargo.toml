@@ -3,7 +3,7 @@ name = "rectanglify"
 version = "0.1.0"
 authors = ["Liam Murphy <liampm32@gmail.com>"]
 edition = "2021"
-description = "A GStreamer plugin that converts a video stream insto a vunch of rectangles"
+description = "A GStreamer plugin that converts a video stream into a bunch of rectangles"
 
 [dependencies]
 gst = { version = "0.18.8", package = "gstreamer" }
