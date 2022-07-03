@@ -3,11 +3,11 @@
 use image::{GenericImage, GenericImageView, Pixel, Primitive};
 use num_traits::ToPrimitive;
 
-pub const DEFAULT_RECTS_PER_PIXEL: f32 = 0.01;
+pub const DEFAULT_RECTS_PER_PIXEL: f64 = 0.1;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Settings {
-    pub rects_per_pixel: f32,
+    pub rects_per_pixel: f64,
 }
 
 impl Default for Settings {
@@ -20,39 +20,39 @@ impl Default for Settings {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Rectangle {
-    left: f32,
-    top: f32,
-    right: f32,
-    bottom: f32,
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
 }
 
 impl Rectangle {
-    fn width(&self) -> f32 {
+    fn width(&self) -> f64 {
         self.right - self.left
     }
 
-    fn height(&self) -> f32 {
+    fn height(&self) -> f64 {
         self.bottom - self.top
     }
 }
 
-fn darkness<P: Pixel>(p: P) -> f32 {
-    1.0 - p.to_luma()[0].to_f32().unwrap() / P::Subpixel::DEFAULT_MAX_VALUE.to_f32().unwrap()
+fn darkness<P: Pixel>(p: P) -> f64 {
+    1.0 - p.to_luma()[0].to_f64().unwrap() / P::Subpixel::DEFAULT_MAX_VALUE.to_f64().unwrap()
 }
 
-fn darkness_at(image: &impl GenericImageView, rect: Rectangle, x: u32, y: u32) -> f32 {
+fn darkness_at(image: &impl GenericImageView, rect: Rectangle, x: u32, y: u32) -> f64 {
     let mut darkness = darkness(image.get_pixel(x, y));
 
-    if rect.left as u32 == x {
-        darkness *= 1.0 - rect.left % 1.0;
-    } else if rect.right as u32 == x {
-        darkness *= rect.right % 1.0;
+    if (x as f64) < rect.left {
+        darkness *= f64::max((x + 1) as f64 - rect.left, 0.0);
+    } else if (x + 1) as f64 > rect.right {
+        darkness *= f64::max(rect.right - x as f64, 0.0);
     }
 
-    if rect.top as u32 == y {
-        darkness *= 1.0 - rect.top % 1.0;
-    } else if rect.bottom as u32 == y {
-        darkness *= rect.bottom % 1.0;
+    if (y as f64) < rect.top {
+        darkness *= f64::max((y + 1) as f64 - rect.top, 0.0);
+    } else if (y + 1) as f64 > rect.bottom {
+        darkness *= f64::max(rect.bottom - y as f64, 0.0);
     }
 
     darkness
@@ -66,10 +66,9 @@ fn horizontal_line<I: GenericImage>(image: &mut I, y: u32, start_x: u32, end_x: 
         ])
     // except alpha, which should be maxed
     .map_with_alpha(|x| x, |_| <I::Pixel as Pixel>::Subpixel::DEFAULT_MAX_VALUE);
+
     for x in start_x..=end_x {
-        if image.in_bounds(x, y) {
-            image.put_pixel(x, y, black);
-        }
+        image.put_pixel(x, y, black);
     }
 }
 
@@ -81,20 +80,21 @@ fn vertical_line<I: GenericImage>(image: &mut I, x: u32, start_y: u32, end_y: u3
         ])
     // except alpha, which should be maxed
     .map_with_alpha(|x| x, |_| <I::Pixel as Pixel>::Subpixel::DEFAULT_MAX_VALUE);
+
     for y in start_y..=end_y {
-        if image.in_bounds(x, y) {
-            image.put_pixel(x, y, black);
-        }
+        image.put_pixel(x, y, black);
     }
 }
 
 pub fn rectanglify<I: GenericImageView, O: GenericImage>(
     input: &I,
     output: &mut O,
-    settings: Settings,
+    mut settings: Settings,
 ) {
-    let total_darkness: f32 = input.pixels().map(|(_, _, p)| darkness(p)).sum();
+    let total_darkness: f64 = input.pixels().map(|(_, _, p)| darkness(p)).sum();
     let num_rects = (total_darkness * settings.rects_per_pixel).round() as usize;
+    // Adjust this so that it actually matches the number of rectangles we're drawing.
+    settings.rects_per_pixel = num_rects as f64 / total_darkness;
 
     // fill the output with white to start with
     let white = *<O::Pixel as Pixel>::from_slice(&vec![
@@ -115,8 +115,8 @@ pub fn rectanglify<I: GenericImageView, O: GenericImage>(
         Rectangle {
             left: 0.0,
             top: 0.0,
-            right: input.width() as f32,
-            bottom: input.height() as f32,
+            right: input.width() as f64,
+            bottom: input.height() as f64,
         },
         num_rects,
     )
@@ -139,7 +139,7 @@ fn draw_rects(
     // The target number of rectangles to be in the first half.
     let target_rects = rects / 2;
     // The target amount of darkness in the first half.
-    let target_darkness = target_rects as f32 / settings.rects_per_pixel;
+    let target_darkness = target_rects as f64 / settings.rects_per_pixel;
 
     if area.width() > area.height() {
         // split it horizontally
@@ -152,11 +152,16 @@ fn draw_rects(
 
             if darkness >= target_darkness {
                 // We found the split! draw a line
-                vertical_line(output, x, area.top as u32, area.bottom as u32);
+                vertical_line(
+                    output,
+                    x,
+                    area.top.floor() as u32,
+                    area.bottom.ceil() as u32 - 1,
+                );
 
                 let overshoot = darkness - target_darkness;
                 // Find the exact point of the split by taking away the amount we overshot.
-                let split = (x + 1) as f32 - overshoot / column_darkness;
+                let split = (x + 1) as f64 - overshoot / column_darkness;
 
                 let left = Rectangle {
                     right: split,
@@ -184,11 +189,16 @@ fn draw_rects(
 
             if darkness >= target_darkness {
                 // We found the split! draw a line
-                horizontal_line(output, y, area.left as u32, area.right as u32);
+                horizontal_line(
+                    output,
+                    y,
+                    area.left.floor() as u32,
+                    area.right.ceil() as u32 - 1,
+                );
 
                 let overshoot = darkness - target_darkness;
                 // Find the exact point of the split by taking away the amount we overshot.
-                let split = (y + 1) as f32 - overshoot / row_darkness;
+                let split = (y + 1) as f64 - overshoot / row_darkness;
 
                 let top = Rectangle {
                     bottom: split,
