@@ -147,9 +147,9 @@ fn draw_rects(
 
     if area.width() > area.height() {
         // split it horizontally
-        for x in area.left as u32..area.right as u32 {
+        for x in area.left.floor() as u32..area.right.ceil() as u32 {
             let mut column_darkness = 0.0;
-            for y in area.top as u32..area.bottom as u32 {
+            for y in area.top.floor() as u32..area.bottom.ceil() as u32 {
                 column_darkness += darkness_at(input, area, x, y);
             }
             darkness += column_darkness;
@@ -179,9 +179,9 @@ fn draw_rects(
         }
     } else {
         // split it vertically
-        for y in area.top as u32..area.bottom as u32 {
+        for y in area.top.floor() as u32..area.bottom.ceil() as u32 {
             let mut row_darkness = 0.0;
-            for x in area.left as u32..area.right as u32 {
+            for x in area.left.floor() as u32..area.right.ceil() as u32 {
                 row_darkness += darkness_at(input, area, x, y);
             }
             darkness += row_darkness;
