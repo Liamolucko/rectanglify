@@ -167,10 +167,15 @@ impl BaseTransformImpl for Rectanglify {
         _: &Self::Type,
         _: gst::PadDirection,
         _: &gst::Caps,
-        _: Option<&gst::Caps>,
+        filter: Option<&gst::Caps>,
     ) -> Option<gst::Caps> {
         // the input and output are completely independent, we always support the full caps.
-        Some(caps())
+        let mut caps = caps();
+        if let Some(filter) = filter {
+            // we do have to apply any filters though
+            caps = caps.intersect(filter)
+        }
+        Some(caps)
     }
 }
 
